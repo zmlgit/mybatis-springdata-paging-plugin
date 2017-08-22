@@ -62,7 +62,7 @@ public class MyBatisSpringDataPagingInterceptor implements Interceptor {
 
         Page result = new PageImpl(content, pageParam, count);
 
-        List<Page> pages = new ArrayList<Page>();
+        List<Page> pages = new ArrayList<Page>(1);
         pages.add(result);
         return pages;
     }
@@ -123,6 +123,10 @@ public class MyBatisSpringDataPagingInterceptor implements Interceptor {
             Iterator iterator = parameterMap.values().iterator();
             while (iterator.hasNext()) {
                 Object val = iterator.next();
+                if (null == val) {
+                    continue;
+                }
+
                 if (val instanceof Pageable) {
                     pageable = (Pageable) val;
                     break;
