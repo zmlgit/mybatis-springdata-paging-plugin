@@ -12,7 +12,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.sql.SQLException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static cn.zmlio.mybatis.utils.MappedStatementUtils.buildCountMappedStatement;
 import static cn.zmlio.mybatis.utils.MappedStatementUtils.buildPagingMappedStatement;
@@ -29,9 +29,13 @@ public class MyBatisSpringDataPagingInterceptor implements Interceptor {
     private final static int INDEX_RESULT_HANDLER = 3;
     private final static String COUNT_SUFFIX = "_Count";
     private final static String PAGING_SUFFIX = "_Paging";
-    private final Map<String, Boolean> mappedMethods = new ConcurrentHashMap<String, Boolean>();
+    private final Map<String, Boolean> mappedMethods = new HashMap<String, Boolean>();
     private Dialect dialect;
     private String[] excludeQuery;
+
+    private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private ReentrantReadWriteLock.ReadLock readLock = lock.readLock();
+    private ReentrantReadWriteLock.WriteLock writeLock = lock.writeLock();
 
     @Override
     public Object intercept(Invocation invocation) throws Throwable {
@@ -104,8 +108,24 @@ public class MyBatisSpringDataPagingInterceptor implements Interceptor {
         if (this.mappedMethods.containsKey(methodName)) {
             return mappedMethods.get(methodName);
         } else {
-            this.mappedMethods.put(methodName, findPageParam(parameter) != null);
-            return mappedMethods.get(methodName);
+            readLock.lock();
+            try {
+                if (this.mappedMethods.containsKey(methodName)) {
+                    return mappedMethods.get(methodName);
+                } else {
+                    lock.writeLock().lock();
+                    try {
+                        Boolean isPageQuery = findPageParam(parameter) != null;
+                        this.mappedMethods.put(methodName, isPageQuery);
+                        return mappedMethods.get(methodName);
+                    } finally {
+                        writeLock.unlock();
+                    }
+
+                }
+            } finally {
+                readLock.unlock();
+            }
         }
     }
 
